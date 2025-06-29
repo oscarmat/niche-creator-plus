@@ -1,0 +1,55 @@
+# Archivos y directorios de WordPress para ignorar
+*.log
+wp-config.php
+wp-content/advanced-cache.php
+wp-content/backup-db/
+wp-content/backups/
+wp-content/blogs.dir/
+wp-content/cache/
+wp-content/upgrade/
+wp-content/uploads/
+wp-content/mu-plugins/
+wp-content/wp-cache-config.php
+wp-content/plugins/hello.php
+
+# Archivos de configuración
+.htaccess
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Archivos de dependencias
+vendor/
+node_modules/
+
+# Archivos de IDE y editores
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+
+# Archivos de entorno
+.env
+.env.*
+!.env.example
+
+# Archivos de compilación
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+
+# Archivos de paquetes
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip

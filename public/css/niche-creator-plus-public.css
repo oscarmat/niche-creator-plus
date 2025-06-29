@@ -1,0 +1,63 @@
+/**
+ * Todo el CSS para el área pública.
+ *
+ * @package    Niche_Creator_Plus
+ * @subpackage Niche_Creator_Plus/public/css
+ */
+
+/* Estilos para los elementos del plugin en el frontend */
+.niche-creator-container {
+    margin: 20px 0;
+    padding: 15px;
+    background-color: #f9f9f9;
+    border-radius: 5px;
+    border: 1px solid #e5e5e5;
+}
+
+.niche-creator-title {
+    font-size: 24px;
+    margin-bottom: 15px;
+    color: #333;
+}
+
+.niche-creator-content {
+    line-height: 1.6;
+    color: #444;
+}
+
+.niche-creator-button {
+    display: inline-block;
+    padding: 8px 16px;
+    background-color: #2271b1;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 4px;
+    margin-top: 15px;
+    transition: background-color 0.3s ease;
+}
+
+.niche-creator-button:hover {
+    background-color: #135e96;
+    color: #fff;
+}
+
+/* Estilos para widgets personalizados */
+.niche-creator-widget {
+    margin-bottom: 20px;
+}
+
+.niche-creator-widget-title {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.niche-creator-widget-content {
+    font-size: 14px;
+}
+
+/* Estilos para elementos específicos que podrían ser añadidos por el plugin */
+.niche-creator-keyword-highlight {
+    background-color: #ffff99;
+    padding: 0 3px;
+}
