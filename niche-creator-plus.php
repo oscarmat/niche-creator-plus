@@ -17,9 +17,13 @@ if (!defined('WPINC')) {
     die;
 }
 
-// Definir constantes del plugin
+/**
+ * Definir constantes del plugin
+ */
 define('NICHE_CREATOR_PLUS_VERSION', '1.0.0');
+define('NICHE_CREATOR_PLUS_NAME', 'niche-creator-plus');
 define('NICHE_CREATOR_PLUS_PATH', plugin_dir_path(__FILE__));
+define('NICHE_CREATOR_PLUS_FILE', __FILE__);
 define('NICHE_CREATOR_PLUS_URL', plugin_dir_url(__FILE__));
 define('NICHE_CREATOR_PLUS_BASENAME', plugin_basename(__FILE__));
 

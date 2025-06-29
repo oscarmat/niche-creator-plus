@@ -1,0 +1,55 @@
+name: Create Release ZIP
+
+on:
+  push:
+    tags:
+      - 'v*' # Ejecutar cuando se cree un tag que comience con 'v'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create build directory
+        run: mkdir -p build/niche-creator-plus
+
+      - name: Copy files to build directory
+        run: |
+          rsync -av --exclude='.git/' \
+                   --exclude='.github/' \
+                   --exclude='build/' \
+                   --exclude='.gitignore' \
+                   --exclude='README.md' \
+                   --exclude='*.zip' \
+                   --exclude='doc/' \
+                   --exclude='tests/' \
+                   --exclude='node_modules/' \
+                   --exclude='vendor/' \
+                   --exclude='.DS_Store' \
+                   --exclude='Thumbs.db' \
+                   ./ build/niche-creator-plus/
+
+      - name: Create ZIP file
+        run: cd build && zip -r niche-creator-plus-${{ steps.get_version.outputs.VERSION }}.zip niche-creator-plus
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ steps.get_version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+          files: ./build/niche-creator-plus-${{ steps.get_version.outputs.VERSION }}.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

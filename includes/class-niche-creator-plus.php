@@ -114,6 +114,11 @@ class Niche_Creator_Plus {
         require_once NICHE_CREATOR_PLUS_PATH . 'includes/class-reprocessor.php';
         
         /**
+         * La clase responsable de gestionar las actualizaciones desde GitHub.
+         */
+        require_once NICHE_CREATOR_PLUS_PATH . 'includes/class-niche-creator-plus-updater.php';
+        
+        /**
          * Funciones de compatibilidad para mantener el código existente.
          */
         require_once NICHE_CREATOR_PLUS_PATH . 'includes/functions.php';
@@ -143,6 +148,7 @@ class Niche_Creator_Plus {
      * @access   private
      */
     private function define_admin_hooks() {
+
         $plugin_admin = new Niche_Creator_Plus_Admin($this->get_plugin_name(), $this->get_version());
 
         $this->loader->add_action('admin_enqueue_scripts', $plugin_admin, 'enqueue_styles');
@@ -150,6 +156,13 @@ class Niche_Creator_Plus {
         
         // Añadir menú de administración
         $this->loader->add_action('admin_menu', $plugin_admin, 'add_plugin_admin_menu');
+
+        // Guardar/Actualizar opciones del plugin
+        $this->loader->add_action('admin_init', $plugin_admin, 'options_update');
+        
+        // Inicializar el sistema de actualizaciones desde GitHub
+        // No necesitamos registrar hooks adicionales ya que el updater
+        // registra sus propios filtros en su constructor
     }
 
     /**
@@ -172,6 +185,15 @@ class Niche_Creator_Plus {
      * @since    1.0.0
      */
     public function run() {
+        // Inicializar el sistema de actualizaciones desde GitHub
+        new Niche_Creator_Plus_Updater(
+            $this->plugin_name,
+            $this->version,
+            NICHE_CREATOR_PLUS_FILE,
+            'oscarmat',
+            'niche-creator-plus'
+        );
+        
         $this->loader->run();
     }
 
