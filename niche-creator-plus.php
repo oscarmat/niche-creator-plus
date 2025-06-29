@@ -3,7 +3,7 @@
  * Plugin Name: Niche Creator Plus
  * Plugin URI: https://example.com/plugins/niche-creator-plus
  * Description: Un plugin para WordPress que facilita la creación y gestión de sitios web de nicho.
- * Version: 1.0.4
+ * Version: 1.0.5
  * Author: Niche Creator Team
  * Author URI: https://example.com
  * Text Domain: niche-creator-plus
@@ -20,7 +20,7 @@ if (!defined('WPINC')) {
 /**
  * Definir constantes del plugin
  */
-define('NICHE_CREATOR_PLUS_VERSION', '1.0.4');
+define('NICHE_CREATOR_PLUS_VERSION', '1.0.5');
 define('NICHE_CREATOR_PLUS_NAME', 'niche-creator-plus');
 define('NICHE_CREATOR_PLUS_PATH', plugin_dir_path(__FILE__));
 define('NICHE_CREATOR_PLUS_FILE', __FILE__);
@@ -42,7 +42,31 @@ function activate_niche_creator_plus() {
         }
         
         error_log('Niche Creator Plus: Verificando si el plugin principal está activo');
-        if (!is_plugin_active('niche-creator/niche-creator.php')) {
+        
+        // Listar todos los plugins activos para diagnóstico
+        $active_plugins = get_option('active_plugins');
+        error_log('Niche Creator Plus: Plugins activos: ' . print_r($active_plugins, true));
+        
+        // Ruta correcta del plugin principal (confirmada por el usuario)
+        $plugin_main_path = 'nichecreator/nichecreator.php';
+        
+        // También comprobar algunas variantes por si acaso
+        $plugin_variants = [
+            $plugin_main_path,
+            'niche-creator/niche-creator.php',
+            'nichecreator/index.php'
+        ];
+        
+        $plugin_found = false;
+        foreach ($plugin_variants as $plugin_path) {
+            if (is_plugin_active($plugin_path)) {
+                error_log('Niche Creator Plus: Plugin principal encontrado como: ' . $plugin_path);
+                $plugin_found = true;
+                break;
+            }
+        }
+        
+        if (!$plugin_found) {
             error_log('Niche Creator Plus: ERROR - Plugin principal Niche Creator no está activo');
             deactivate_plugins(plugin_basename(__FILE__));
             wp_die('Este plugin requiere que Niche Creator esté instalado y activado. Por favor, activa Niche Creator antes de activar este plugin.');
