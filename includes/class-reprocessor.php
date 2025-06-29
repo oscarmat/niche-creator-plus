@@ -82,6 +82,11 @@ class Niche_Creator_Plus_Reprocessor {
             $hook = sanitize_text_field( $_POST['nichecreator_plus_hook'] );
             $group = sanitize_text_field( $_POST['nichecreator_plus_group'] );
             
+            // Si el grupo es __NULL__, lo convertimos a null para la consulta SQL
+            if ($group === '__NULL__') {
+                $group = null;
+            }
+            
             // Reprocesar acciones con el hook y grupo específicos
             $reprogramadas = $this->reprocesar_acciones_fallidas_por_hook_y_grupo( $hook, $group );
 
@@ -109,13 +114,15 @@ class Niche_Creator_Plus_Reprocessor {
             foreach ( $resumen as $fila ) {
                 echo '<tr>';
                 echo '<td>' . esc_html( $fila['hook'] ) . '</td>';
-                echo '<td>' . esc_html( $fila['group'] ) . '</td>';
+                echo '<td>' . (empty($fila['group']) ? '<em>Sin grupo</em>' : esc_html( $fila['group'] )) . '</td>';
                 echo '<td>' . intval( $fila['count'] ) . '</td>';
                 echo '<td>';
                 echo '<button type="submit" name="nichecreator_plus_hook" value="' . esc_attr( $fila['hook'] ) . '" class="button button-primary">';
                 echo 'Reprocesar';
                 echo '</button>';
-                echo '<input type="hidden" name="nichecreator_plus_group" value="' . esc_attr( $fila['group'] ) . '">';
+                // Usamos un valor especial para indicar NULL cuando el grupo está vacío
+                $group_value = empty($fila['group']) ? '__NULL__' : $fila['group'];
+                echo '<input type="hidden" name="nichecreator_plus_group" value="' . esc_attr( $group_value ) . '">';
                 echo '</td>';
                 echo '</tr>';
             }
@@ -180,12 +187,13 @@ class Niche_Creator_Plus_Reprocessor {
                 $hook, $group
             ) );
         } else {
-            // Si no se especifica grupo, filtrar solo por hook
+            // Si no se especifica grupo (grupo es NULL), filtrar por hook y grupo NULL
             $acciones = $wpdb->get_results( $wpdb->prepare(
-                "SELECT action_id, args
-                 FROM {$wpdb->prefix}actionscheduler_actions
-                 WHERE hook = %s AND status = 'failed'
-                 ORDER BY action_id ASC",
+                "SELECT a.action_id, a.args
+                 FROM {$wpdb->prefix}actionscheduler_actions a
+                 LEFT JOIN {$wpdb->prefix}actionscheduler_groups g ON a.group_id = g.group_id
+                 WHERE a.hook = %s AND a.status = 'failed' AND (g.slug IS NULL OR g.slug = '')
+                 ORDER BY a.action_id ASC",
                 $hook
             ) );
         }

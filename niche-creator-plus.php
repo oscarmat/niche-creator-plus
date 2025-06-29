@@ -3,7 +3,7 @@
  * Plugin Name: Niche Creator Plus
  * Plugin URI: https://example.com/plugins/niche-creator-plus
  * Description: Un plugin para WordPress que facilita la creación y gestión de sitios web de nicho.
- * Version: 1.0.9
+ * Version: 1.0.10
  * Author: Niche Creator Team
  * Author URI: https://example.com
  * Text Domain: niche-creator-plus
@@ -20,7 +20,7 @@ if (!defined('WPINC')) {
 /**
  * Definir constantes del plugin
  */
-define('NICHE_CREATOR_PLUS_VERSION', '1.0.9');
+define('NICHE_CREATOR_PLUS_VERSION', '1.0.10');
 define('NICHE_CREATOR_PLUS_NAME', 'niche-creator-plus');
 define('NICHE_CREATOR_PLUS_PATH', plugin_dir_path(__FILE__));
 define('NICHE_CREATOR_PLUS_FILE', __FILE__);
