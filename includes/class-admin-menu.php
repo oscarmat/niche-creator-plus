@@ -93,6 +93,16 @@ class Niche_Creator_Plus_Admin_Menu {
                 'nichecreator_plus_reprocesar',
                 array($this, 'render_main_page')
             );
+            
+            // Añadir página de diagnóstico
+            add_submenu_page(
+                'nichecreator_plus',
+                'Diagnóstico',
+                'Diagnóstico',
+                'manage_options',
+                'nichecreator_plus_diagnostico',
+                array($this, 'render_diagnostico_page')
+            );
         } else {
             // Mostrar aviso si no está activo el menú padre
             add_action('admin_notices', array($this, 'display_dependency_notice'));
@@ -117,14 +127,23 @@ class Niche_Creator_Plus_Admin_Menu {
      */
     public function render_main_page() {
         // Instanciar el reprocesador y llamar a su método de renderizado
-        $reprocessor = new Niche_Creator_Plus_Reprocessor();
+        $reprocessor = new Niche_Creator_Plus_Reprocessor($this->plugin_name, $this->version);
         $reprocessor->render_page();
+    }
+    
+    /**
+     * Renderiza la página de diagnóstico del plugin
+     *
+     * @since    1.0.2
+     */
+    public function render_diagnostico_page() {
+        require_once plugin_dir_path(dirname(__FILE__)) . 'admin/partials/niche-creator-plus-diagnostico.php';
     }
 }
 
 // Función de compatibilidad para mantener el código existente funcionando
 function nichecreator_plus_render_reprocesar() {
-    $reprocessor = new Niche_Creator_Plus_Reprocessor();
+    $reprocessor = new Niche_Creator_Plus_Reprocessor('niche-creator-plus', NICHE_CREATOR_PLUS_VERSION);
     $reprocessor->render_page();
 }
 

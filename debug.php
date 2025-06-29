@@ -1,6 +1,9 @@
 <?php
 /**
- * Archivo de depuración para identificar errores de activación
+ * Archivo de depuración independiente para identificar errores de activación
+ * 
+ * Este archivo puede ejecutarse directamente desde el navegador, incluso si el plugin
+ * no puede activarse. Colócalo en la raíz de WordPress y accede a él directamente.
  */
 
 // Habilitar la visualización de errores
@@ -8,9 +11,37 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-// Definir constantes de WordPress si no están definidas
+// Definir la ruta al plugin
+$plugin_path = __DIR__;
+
+// Definir constantes necesarias si no existen
+if (!defined('NICHE_CREATOR_PLUS_VERSION')) {
+    define('NICHE_CREATOR_PLUS_VERSION', '1.0.2');
+}
+
+if (!defined('NICHE_CREATOR_PLUS_PATH')) {
+    define('NICHE_CREATOR_PLUS_PATH', $plugin_path . '/');
+}
+
+// Intentar cargar WordPress si no está cargado
 if (!defined('ABSPATH')) {
-    define('ABSPATH', dirname(__FILE__) . '/');
+    // Buscar wp-load.php hasta 5 niveles arriba
+    $wp_load_path = '';
+    $max_levels = 5;
+    $current_dir = $plugin_path;
+    
+    for ($i = 0; $i <= $max_levels; $i++) {
+        if (file_exists($current_dir . '/wp-load.php')) {
+            $wp_load_path = $current_dir . '/wp-load.php';
+            break;
+        }
+        $current_dir = dirname($current_dir);
+    }
+    
+    if (!empty($wp_load_path)) {
+        // Cargar WordPress si se encuentra
+        require_once $wp_load_path;
+    }
 }
 
 echo "<h1>Diagnóstico de Niche Creator Plus</h1>";
