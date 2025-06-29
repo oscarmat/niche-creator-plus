@@ -35,7 +35,7 @@ if (!defined('WPINC')) {
         
         <?php 
         if (function_exists('is_plugin_active')) {
-            if (is_plugin_active('niche-creator/niche-creator.php')) {
+            if (is_plugin_active('nichecreator/nichecreator.php')) {
                 echo '<p>✅ Plugin Niche Creator está activo</p>';
             } else {
                 echo '<p>⚠️ Plugin Niche Creator no está activo. Este plugin complementa al plugin principal.</p>';
@@ -47,7 +47,7 @@ if (!defined('WPINC')) {
             require_once ABSPATH . 'wp-admin/includes/plugin.php';
             
             if (function_exists('is_plugin_active')) {
-                if (is_plugin_active('niche-creator/niche-creator.php')) {
+                if (is_plugin_active('nichecreator/nichecreator.php')) {
                     echo '<p>✅ Plugin Niche Creator está activo (verificado después de cargar funciones)</p>';
                 } else {
                     echo '<p>⚠️ Plugin Niche Creator no está activo (verificado después de cargar funciones)</p>';

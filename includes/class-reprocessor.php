@@ -77,40 +77,55 @@ class Niche_Creator_Plus_Reprocessor {
     public function render_page() {
         echo '<div class="wrap"><h1>Niche Creator Plus</h1>';
 
-        // Resumen de errores por hook
-        echo '<h2>Resumen de eventos fallidos</h2>';
-        echo '<table class="widefat"><thead><tr><th>Hook</th><th>Grupo</th><th>Acciones fallidas</th></tr></thead><tbody>';
-        $resumen = $this->get_resumen_fallidas();
-        foreach ( $resumen as $fila ) {
-            echo '<tr>';
-            echo '<td>' . esc_html( $fila['hook'] ) . '</td>';
-            echo '<td>' . esc_html( $fila['group'] ) . '</td>';
-            echo '<td>' . intval( $fila['count'] ) . '</td>';
-            echo '</tr>';
-        }
-        echo '</tbody></table>';
-
         // Procesar botón si se ha pulsado
-        if ( isset( $_POST['nichecreator_plus_hook'] ) && check_admin_referer( 'nichecreator_plus_accion', 'nichecreator_plus_nonce' ) ) {
+        if ( isset( $_POST['nichecreator_plus_hook'] ) && isset( $_POST['nichecreator_plus_group'] ) && check_admin_referer( 'nichecreator_plus_accion', 'nichecreator_plus_nonce' ) ) {
             $hook = sanitize_text_field( $_POST['nichecreator_plus_hook'] );
-            $reprogramadas = $this->reprocesar_acciones_fallidas_por_hook( $hook );
+            $group = sanitize_text_field( $_POST['nichecreator_plus_group'] );
+            
+            // Reprocesar acciones con el hook y grupo específicos
+            $reprogramadas = $this->reprocesar_acciones_fallidas_por_hook_y_grupo( $hook, $group );
 
-            echo '<h2>Reprogramación completada para: ' . esc_html( $hook ) . '</h2>';
-            echo '<p>Total reprogramadas: ' . count( $reprogramadas ) . '</p>';
+            echo '<div class="notice notice-success"><p>';
+            echo '<strong>Reprogramación completada para:</strong> ' . esc_html( $hook ) . ' (Grupo: ' . esc_html( $group ) . ')<br>';
+            echo 'Total reprogramadas: ' . count( $reprogramadas );
+            echo '</p></div>';
+            
             if ( count( $reprogramadas ) > 0 ) {
-                echo '<pre>' . esc_html( var_export( $reprogramadas, true ) ) . '</pre>';
+                echo '<div class="card"><h3>Detalles de acciones reprogramadas</h3>';
+                echo '<pre>' . esc_html( var_export( $reprogramadas, true ) ) . '</pre></div>';
             }
         }
 
-        // Formulario por hook
-        echo '<h2>Reprocesar eventos individualmente</h2><form method="post">';
+        // Resumen de errores por hook
+        echo '<h2>Resumen de eventos fallidos</h2>';
+        echo '<form method="post">';
         wp_nonce_field( 'nichecreator_plus_accion', 'nichecreator_plus_nonce' );
-        foreach ( $this->get_hooks() as $hook ) {
-            echo '<button type="submit" name="nichecreator_plus_hook" value="' . esc_attr( $hook ) . '" class="button button-primary" style="margin:6px;" title="' . esc_attr( $hook ) . '">';
-            echo 'Reprocesar ' . esc_html( $hook );
-            echo '</button> ';
+        echo '<table class="widefat"><thead><tr><th>Hook</th><th>Grupo</th><th>Acciones fallidas</th><th>Acción</th></tr></thead><tbody>';
+        
+        $resumen = $this->get_resumen_fallidas();
+        if (empty($resumen)) {
+            echo '<tr><td colspan="4">No hay eventos fallidos para reprocesar</td></tr>';
+        } else {
+            foreach ( $resumen as $fila ) {
+                echo '<tr>';
+                echo '<td>' . esc_html( $fila['hook'] ) . '</td>';
+                echo '<td>' . esc_html( $fila['group'] ) . '</td>';
+                echo '<td>' . intval( $fila['count'] ) . '</td>';
+                echo '<td>';
+                echo '<button type="submit" name="nichecreator_plus_hook" value="' . esc_attr( $fila['hook'] ) . '" class="button button-primary">';
+                echo 'Reprocesar';
+                echo '</button>';
+                echo '<input type="hidden" name="nichecreator_plus_group" value="' . esc_attr( $fila['group'] ) . '">';
+                echo '</td>';
+                echo '</tr>';
+            }
         }
-        echo '</form></div>';
+        echo '</tbody></table>';
+        echo '</form>';
+        
+        // Ya no necesitamos los botones individuales por hook, ya que ahora tenemos botones en cada fila
+        // Los eliminamos para evitar duplicidad de funcionalidad
+        echo '</div>';
     }
 
     /**
@@ -121,6 +136,19 @@ class Niche_Creator_Plus_Reprocessor {
      * @return   array     Resultado de las acciones reprocesadas
      */
     public function reprocesar_acciones_fallidas_por_hook( $hook ) {
+        // Llamar al método más específico sin filtrar por grupo
+        return $this->reprocesar_acciones_fallidas_por_hook_y_grupo($hook, null);
+    }
+    
+    /**
+     * Reprocesa las acciones fallidas para un hook y grupo específicos
+     *
+     * @since    1.0.7
+     * @param    string    $hook     El hook a reprocesar
+     * @param    string    $group    El grupo a reprocesar (opcional)
+     * @return   array     Resultado de las acciones reprocesadas
+     */
+    public function reprocesar_acciones_fallidas_por_hook_y_grupo( $hook, $group = null ) {
         // Verificar que Action Scheduler esté disponible
         if (!function_exists('as_schedule_single_action')) {
             return array('error' => 'Action Scheduler no está disponible. Este plugin requiere que Niche Creator esté activado.');
@@ -141,13 +169,26 @@ class Niche_Creator_Plus_Reprocessor {
         $resultado = [];
 
         // Obtener acciones fallidas
-        $acciones = $wpdb->get_results( $wpdb->prepare(
-            "SELECT action_id, args
-             FROM {$wpdb->prefix}actionscheduler_actions
-             WHERE hook = %s AND status = 'failed'
-             ORDER BY action_id ASC",
-            $hook
-        ) );
+        if ($group) {
+            // Si se especifica un grupo, filtrar por hook y grupo
+            $acciones = $wpdb->get_results( $wpdb->prepare(
+                "SELECT a.action_id, a.args
+                 FROM {$wpdb->prefix}actionscheduler_actions a
+                 INNER JOIN {$wpdb->prefix}actionscheduler_groups g ON a.group_id = g.group_id
+                 WHERE a.hook = %s AND a.status = 'failed' AND g.slug = %s
+                 ORDER BY a.action_id ASC",
+                $hook, $group
+            ) );
+        } else {
+            // Si no se especifica grupo, filtrar solo por hook
+            $acciones = $wpdb->get_results( $wpdb->prepare(
+                "SELECT action_id, args
+                 FROM {$wpdb->prefix}actionscheduler_actions
+                 WHERE hook = %s AND status = 'failed'
+                 ORDER BY action_id ASC",
+                $hook
+            ) );
+        }
 
         foreach ( $acciones as $i => $accion ) {
             $args = maybe_unserialize( $accion->args );
