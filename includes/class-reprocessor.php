@@ -121,6 +121,11 @@ class Niche_Creator_Plus_Reprocessor {
      * @return   array     Resultado de las acciones reprocesadas
      */
     public function reprocesar_acciones_fallidas_por_hook( $hook ) {
+        // Verificar que Action Scheduler esté disponible
+        if (!function_exists('as_schedule_single_action')) {
+            return array('error' => 'Action Scheduler no está disponible. Este plugin requiere que Niche Creator esté activado.');
+        }
+        
         global $wpdb;
 
         // Obtener timestamp de la última acción pendiente en nuestro grupo

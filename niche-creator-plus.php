@@ -3,7 +3,7 @@
  * Plugin Name: Niche Creator Plus
  * Plugin URI: https://example.com/plugins/niche-creator-plus
  * Description: Un plugin para WordPress que facilita la creación y gestión de sitios web de nicho.
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: Niche Creator Team
  * Author URI: https://example.com
  * Text Domain: niche-creator-plus
@@ -20,7 +20,7 @@ if (!defined('WPINC')) {
 /**
  * Definir constantes del plugin
  */
-define('NICHE_CREATOR_PLUS_VERSION', '1.0.0');
+define('NICHE_CREATOR_PLUS_VERSION', '1.0.1');
 define('NICHE_CREATOR_PLUS_NAME', 'niche-creator-plus');
 define('NICHE_CREATOR_PLUS_PATH', plugin_dir_path(__FILE__));
 define('NICHE_CREATOR_PLUS_FILE', __FILE__);
@@ -31,7 +31,21 @@ define('NICHE_CREATOR_PLUS_BASENAME', plugin_basename(__FILE__));
  * Código que se ejecuta durante la activación del plugin.
  */
 function activate_niche_creator_plus() {
-    // Acciones a realizar durante la activación
+    // Verificar que el plugin principal Niche Creator esté activo
+    if (!function_exists('is_plugin_active')) {
+        require_once ABSPATH . 'wp-admin/includes/plugin.php';
+    }
+    
+    if (!is_plugin_active('niche-creator/niche-creator.php')) {
+        deactivate_plugins(plugin_basename(__FILE__));
+        wp_die('Este plugin requiere que Niche Creator esté instalado y activado. Por favor, activa Niche Creator antes de activar este plugin.');
+    }
+    
+    // Verificar que Action Scheduler esté disponible (debería estar incluido en Niche Creator)
+    if (!function_exists('as_schedule_single_action')) {
+        deactivate_plugins(plugin_basename(__FILE__));
+        wp_die('Este plugin requiere Action Scheduler, que debería estar incluido en el plugin Niche Creator. Por favor, contacta al soporte técnico.');
+    }
 }
 
 /**
