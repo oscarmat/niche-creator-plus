@@ -222,10 +222,7 @@ function nichecreator_plus_get_hooks() {
 }
 
 // === Página principal del menú ===
-function nichecreator_plus_render_page() {
-    $reprocessor = new Niche_Creator_Plus_Reprocessor('nichecreator_plus', '1.0.0');
-    $reprocessor->render_page();
-}
+// Nota: La función nichecreator_plus_render_page se ha movido a class-admin-menu.php para evitar duplicación
 
 // === Función reutilizable para reprocesar fallidas ===
 function reprocesar_acciones_fallidas_por_hook( $hook ) {
