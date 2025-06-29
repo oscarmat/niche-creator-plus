@@ -130,4 +130,33 @@ class Niche_Creator_Plus_Admin {
         require_once plugin_dir_path(dirname(__FILE__)) . 'admin/partials/niche-creator-plus-admin-settings.php';
     }
 
+    /**
+     * Actualiza las opciones del plugin
+     *
+     * @since    1.0.0
+     */
+    public function options_update() {
+        // Aquí se procesarían las actualizaciones de opciones del plugin
+        // Por ejemplo, registrar configuraciones, secciones y campos
+        
+        // Por ahora, simplemente registramos una opción de ejemplo
+        register_setting(
+            'niche_creator_plus_options', // Grupo de opciones
+            'niche_creator_plus_settings', // Nombre de la opción
+            array($this, 'validate_options') // Callback de validación opcional
+        );
+    }
+    
+    /**
+     * Valida las opciones del plugin
+     *
+     * @since    1.0.0
+     * @param    array    $input    Valores de entrada a validar
+     * @return   array    Valores validados
+     */
+    public function validate_options($input) {
+        // Aquí se validarían las opciones del plugin
+        return $input;
+    }
+
 }
