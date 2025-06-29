@@ -20,6 +20,7 @@ jobs:
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
+      # Asegurarnos de que la carpeta dentro del ZIP siempre se llame 'niche-creator-plus'
       - name: Create build directory
         run: mkdir -p build/niche-creator-plus
 
@@ -40,7 +41,13 @@ jobs:
                    ./ build/niche-creator-plus/
 
       - name: Create ZIP file
-        run: cd build && zip -r niche-creator-plus-${{ steps.get_version.outputs.VERSION }}.zip niche-creator-plus
+        # Importante: Entrar al directorio donde está la carpeta niche-creator-plus y crear el ZIP desde ahí
+        # Esto asegura que la estructura del ZIP sea correcta para WordPress
+        run: |
+          cd build
+          zip -r niche-creator-plus-${{ steps.get_version.outputs.VERSION }}.zip niche-creator-plus
+          # Verificar la estructura del ZIP
+          unzip -l niche-creator-plus-${{ steps.get_version.outputs.VERSION }}.zip | head -n 10
 
       - name: Create GitHub Release
         id: create_release
