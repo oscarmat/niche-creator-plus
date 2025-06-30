@@ -20,12 +20,13 @@ jobs:
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      # Asegurarnos de que la carpeta dentro del ZIP siempre se llame 'niche-creator-plus'
-      - name: Create build directory
-        run: mkdir -p build/niche-creator-plus
-
-      - name: Copy files to build directory
+      # Enfoque mejorado: crear un ZIP genérico y luego renombrarlo
+      - name: Prepare plugin files
         run: |
+          # Crear directorio temporal
+          mkdir -p /tmp/niche-creator-plus
+          
+          # Copiar archivos del plugin (excluyendo archivos innecesarios)
           rsync -av --exclude='.git/' \
                    --exclude='.github/' \
                    --exclude='build/' \
@@ -38,17 +39,41 @@ jobs:
                    --exclude='vendor/' \
                    --exclude='.DS_Store' \
                    --exclude='Thumbs.db' \
-                   ./ build/niche-creator-plus/
-
-      - name: Create ZIP file
-        # Importante: Entrar al directorio donde está la carpeta niche-creator-plus y crear el ZIP desde ahí
-        # Esto asegura que la estructura del ZIP sea correcta para WordPress
+                   ./ /tmp/niche-creator-plus/
+          
+          # Crear directorio de build
+          mkdir -p build
+      
+      - name: Create and verify ZIP file
         run: |
-          cd build
-          zip -r niche-creator-plus-${{ steps.get_version.outputs.VERSION }}.zip niche-creator-plus
-          # Verificar la estructura del ZIP
-          unzip -l niche-creator-plus-${{ steps.get_version.outputs.VERSION }}.zip | head -n 10
+          # Crear primero un ZIP genérico (sin versión en el nombre)
+          cd /tmp
+          zip -r $GITHUB_WORKSPACE/build/niche-creator-plus.zip niche-creator-plus
+          
+          # Verificar la estructura del ZIP genérico
+          cd $GITHUB_WORKSPACE/build
+          echo "Verificando estructura del ZIP genérico:"
+          unzip -l niche-creator-plus.zip
+          
+          # Extraer el ZIP para verificar la estructura
+          echo "\nExtrayendo ZIP para verificar estructura:"
+          mkdir -p test-extract
+          unzip -d test-extract niche-creator-plus.zip
+          ls -la test-extract/
+          
+          # Solo al final, renombrar el ZIP para incluir la versión
+          mv niche-creator-plus.zip niche-creator-plus-${{ steps.get_version.outputs.VERSION }}.zip
+          echo "\nZIP renombrado a: niche-creator-plus-${{ steps.get_version.outputs.VERSION }}.zip"
 
+      - name: Verificar estructura del ZIP
+        run: |
+          ROOT_DIR=$(unzip -l build/niche-creator-plus-${{ steps.get_version.outputs.VERSION }}.zip | awk '{print $4}' | grep -oE '^[^/]+/' | sort -u)
+          if [ "$ROOT_DIR" != "niche-creator-plus/" ]; then
+            echo "❌ Estructura incorrecta: la raíz del ZIP no es 'niche-creator-plus/'"
+            exit 1
+          else
+            echo "✔ El ZIP contiene correctamente una sola carpeta raíz llamada 'niche-creator-plus/'"
+          fi    
       - name: Create GitHub Release
         id: create_release
         uses: softprops/action-gh-release@v1

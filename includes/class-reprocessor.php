@@ -178,6 +178,9 @@ class Niche_Creator_Plus_Reprocessor {
         // Obtener acciones fallidas
         if ($group) {
             // Si se especifica un grupo, filtrar por hook y grupo
+            $resultado['debug_info'] = 'Ejecutando búsqueda con grupo específico: ' . $group;
+            error_log('NCP Reprocessor: Ejecutando búsqueda con grupo específico: ' . $group);
+            
             $acciones = $wpdb->get_results( $wpdb->prepare(
                 "SELECT a.action_id, a.args
                  FROM {$wpdb->prefix}actionscheduler_actions a
@@ -188,6 +191,9 @@ class Niche_Creator_Plus_Reprocessor {
             ) );
         } else {
             // Si no se especifica grupo (grupo es NULL), filtrar por hook y grupo NULL
+            $resultado['debug_info'] = 'Ejecutando búsqueda sin grupo específico (grupo NULL)'; 
+            error_log('NCP Reprocessor: Ejecutando búsqueda sin grupo específico (grupo NULL)'); 
+            
             $acciones = $wpdb->get_results( $wpdb->prepare(
                 "SELECT a.action_id, a.args
                  FROM {$wpdb->prefix}actionscheduler_actions a
@@ -197,6 +203,11 @@ class Niche_Creator_Plus_Reprocessor {
                 $hook
             ) );
         }
+
+        // Mostrar cantidad de acciones seleccionadas
+        $total_acciones = count($acciones);
+        $resultado['total_acciones'] = $total_acciones;
+        error_log('NCP Reprocessor: Se encontraron ' . $total_acciones . ' acciones fallidas para reprocesar');
 
         foreach ( $acciones as $i => $accion ) {
             $args = maybe_unserialize( $accion->args );
