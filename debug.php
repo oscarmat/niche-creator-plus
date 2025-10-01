@@ -115,8 +115,7 @@ try {
     require_once 'public/class-niche-creator-plus-public.php';
     echo "✓ class-niche-creator-plus-public.php cargado correctamente<br>";
     
-    require_once 'includes/functions.php';
-    echo "✓ functions.php cargado correctamente<br>";
+    // NOTA: functions.php fue eliminado en la versión 1.0.13 (no contenía funcionalidad)
     
     // Intentar instanciar las clases principales
     echo "<h3>Intentando instanciar clases...</h3>";

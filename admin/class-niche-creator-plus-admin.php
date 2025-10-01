@@ -103,13 +103,12 @@ class Niche_Creator_Plus_Admin {
      * Añade opciones de menú para el plugin en el área de administración.
      *
      * @since    1.0.0
+     * @deprecated 1.0.13 Este método ya no es necesario. El menú se registra en la clase principal.
      */
     public function add_plugin_admin_menu() {
-        // Instanciar la clase de menú de administración
-        $admin_menu = new Niche_Creator_Plus_Admin_Menu($this->plugin_name, $this->version);
-        
-        // El menú se registra automáticamente en el constructor de la clase
-        // No necesitamos hacer nada más aquí
+        // Este método está obsoleto y se mantiene por compatibilidad.
+        // El registro del menú ahora se hace en la clase principal (Niche_Creator_Plus)
+        // para evitar instanciaciones múltiples de Admin_Menu.
     }
 
     /**

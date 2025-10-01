@@ -41,6 +41,15 @@ class Niche_Creator_Plus_Admin_Menu {
     private $version;
 
     /**
+     * Instancia única del reprocessor.
+     *
+     * @since    1.0.13
+     * @access   private
+     * @var      Niche_Creator_Plus_Reprocessor    $reprocessor    Instancia del reprocessor.
+     */
+    private $reprocessor;
+
+    /**
      * Inicializa la clase y establece sus propiedades.
      *
      * @since    1.0.0
@@ -51,8 +60,18 @@ class Niche_Creator_Plus_Admin_Menu {
         $this->plugin_name = $plugin_name;
         $this->version = $version;
         
-        // Registrar el menú de administración
-        add_action('admin_menu', array($this, 'register_admin_menu'), 99);
+        // NO registrar hooks en el constructor
+        // Los hooks deben registrarse externamente para evitar duplicaciones
+    }
+
+    /**
+     * Establece la instancia del reprocessor para reutilización.
+     *
+     * @since    1.0.13
+     * @param    Niche_Creator_Plus_Reprocessor    $reprocessor    Instancia del reprocessor.
+     */
+    public function set_reprocessor($reprocessor) {
+        $this->reprocessor = $reprocessor;
     }
 
     /**
@@ -126,9 +145,14 @@ class Niche_Creator_Plus_Admin_Menu {
      * @since    1.0.0
      */
     public function render_main_page() {
-        // Instanciar el reprocesador y llamar a su método de renderizado
-        $reprocessor = new Niche_Creator_Plus_Reprocessor($this->plugin_name, $this->version);
-        $reprocessor->render_page();
+        // Usar la instancia del reprocessor proporcionada
+        if ($this->reprocessor) {
+            $this->reprocessor->render_page();
+        } else {
+            // Fallback: crear instancia si no está disponible
+            $reprocessor = new Niche_Creator_Plus_Reprocessor($this->plugin_name, $this->version);
+            $reprocessor->render_page();
+        }
     }
     
     /**
@@ -139,15 +163,4 @@ class Niche_Creator_Plus_Admin_Menu {
     public function render_diagnostico_page() {
         require_once plugin_dir_path(dirname(__FILE__)) . 'admin/partials/niche-creator-plus-diagnostico.php';
     }
-}
-
-// Función de compatibilidad para mantener el código existente funcionando
-function nichecreator_plus_render_reprocesar() {
-    $reprocessor = new Niche_Creator_Plus_Reprocessor('niche-creator-plus', NICHE_CREATOR_PLUS_VERSION);
-    $reprocessor->render_page();
-}
-
-// Función de compatibilidad para la página principal
-function nichecreator_plus_render_page() {
-    nichecreator_plus_render_reprocesar();
 }

@@ -81,31 +81,37 @@ class Niche_Creator_Plus_Reprocessor {
         if ( isset( $_POST['nichecreator_plus_hook'] ) && isset( $_POST['nichecreator_plus_group'] ) && check_admin_referer( 'nichecreator_plus_accion', 'nichecreator_plus_nonce' ) ) {
             $hook = sanitize_text_field( $_POST['nichecreator_plus_hook'] );
             $group = sanitize_text_field( $_POST['nichecreator_plus_group'] );
-            
+
+            // Validar que el hook esté en la lista permitida
+            $allowed_hooks = $this->get_hooks();
+            if (!in_array($hook, $allowed_hooks)) {
+                wp_die(esc_html__('Hook no válido', 'niche-creator-plus'));
+            }
+
             // Si el grupo es __NULL__, lo convertimos a null para la consulta SQL
             if ($group === '__NULL__') {
                 $group = null;
             }
-            
+
             // Reprocesar acciones con el hook y grupo específicos
             $reprogramadas = $this->reprocesar_acciones_fallidas_por_hook_y_grupo( $hook, $group );
 
             echo '<div class="notice notice-success"><p>';
             echo '<strong>Reprogramación completada para:</strong> ' . esc_html( $hook ) . ' (Grupo: ' . ($group === null ? '<em>Sin grupo</em>' : esc_html( $group )) . ')<br>';
             echo 'Total reprogramadas: ' . count( $reprogramadas );
-            
+
             // Mostrar información de depuración si está disponible
             if (isset($reprogramadas['debug_info'])) {
                 echo '<br><strong>Información de depuración:</strong> ' . esc_html($reprogramadas['debug_info']);
             }
-            
+
             // Mostrar total de acciones encontradas
             if (isset($reprogramadas['total_acciones'])) {
                 echo '<br><strong>Total de acciones encontradas:</strong> ' . intval($reprogramadas['total_acciones']);
             }
-            
+
             echo '</p></div>';
-            
+
             if ( count( $reprogramadas ) > 0 ) {
                 echo '<div class="card"><h3>Detalles de acciones reprogramadas</h3>';
                 echo '<pre>' . esc_html( var_export( $reprogramadas, true ) ) . '</pre></div>';
@@ -186,7 +192,6 @@ class Niche_Creator_Plus_Reprocessor {
         $intervalo = 120; // segundos
         $resultado = [];
 
-        // Obtener acciones fallidas
         if ($group) {
             // Si se especifica un grupo, filtrar por hook y grupo
             $resultado['debug_info'] = 'Ejecutando búsqueda con grupo específico: ' . $group;
@@ -199,6 +204,7 @@ class Niche_Creator_Plus_Reprocessor {
                  ORDER BY a.action_id ASC",
                 $hook, $group
             ) );
+            $total_acciones = count($acciones);
         } else {
             // Si no se especifica grupo (grupo es NULL), filtrar por hook y grupo NULL
             $resultado['debug_info'] = 'Ejecutando búsqueda sin grupo específico (grupo NULL)'; 
@@ -211,10 +217,10 @@ class Niche_Creator_Plus_Reprocessor {
                  ORDER BY a.action_id ASC",
                 $hook
             ) );
+            $total_acciones = count($acciones);
         }
-
+        echo 'Total acciones seleccionadas: ' . esc_html($total_acciones);
         // Mostrar cantidad de acciones seleccionadas
-        $total_acciones = count($acciones);
         $resultado['total_acciones'] = $total_acciones;
 
         foreach ( $acciones as $i => $accion ) {
@@ -281,25 +287,4 @@ class Niche_Creator_Plus_Reprocessor {
             $hooks
         ), ARRAY_A );
     }
-}
-
-// === Hooks que quieres gestionar ===
-function nichecreator_plus_get_hooks() {
-    $reprocessor = new Niche_Creator_Plus_Reprocessor('nichecreator_plus', '1.0.0');
-    return $reprocessor->get_hooks();
-}
-
-// === Página principal del menú ===
-// Nota: La función nichecreator_plus_render_page se ha movido a class-admin-menu.php para evitar duplicación
-
-// === Función reutilizable para reprocesar fallidas ===
-function reprocesar_acciones_fallidas_por_hook( $hook ) {
-    $reprocessor = new Niche_Creator_Plus_Reprocessor('nichecreator_plus', '1.0.0');
-    return $reprocessor->reprocesar_acciones_fallidas_por_hook( $hook );
-}
-
-// === Obtener resumen agrupado por hook y grupo ===
-function nichecreator_plus_get_resumen_fallidas() {
-    $reprocessor = new Niche_Creator_Plus_Reprocessor('nichecreator_plus', '1.0.0');
-    return $reprocessor->get_resumen_fallidas();
 }

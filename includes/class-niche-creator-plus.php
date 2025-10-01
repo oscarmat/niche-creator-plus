@@ -48,6 +48,24 @@ class Niche_Creator_Plus {
     protected $version;
 
     /**
+     * Instancia única del menú de administración.
+     *
+     * @since    1.0.13
+     * @access   private
+     * @var      Niche_Creator_Plus_Admin_Menu    $admin_menu    Instancia del menú.
+     */
+    private $admin_menu;
+
+    /**
+     * Instancia única del reprocessor.
+     *
+     * @since    1.0.13
+     * @access   private
+     * @var      Niche_Creator_Plus_Reprocessor    $reprocessor    Instancia del reprocessor.
+     */
+    private $reprocessor;
+
+    /**
      * Define las funcionalidades principales del plugin.
      *
      * Establece el nombre y la versión del plugin que se puede utilizar en todo el plugin.
@@ -121,7 +139,7 @@ class Niche_Creator_Plus {
         /**
          * Funciones de compatibilidad para mantener el código existente.
          */
-        require_once NICHE_CREATOR_PLUS_PATH . 'includes/functions.php';
+        // require_once NICHE_CREATOR_PLUS_PATH . 'includes/functions.php';
 
         $this->loader = new Niche_Creator_Plus_Loader();
     }
@@ -154,11 +172,20 @@ class Niche_Creator_Plus {
         $this->loader->add_action('admin_enqueue_scripts', $plugin_admin, 'enqueue_styles');
         $this->loader->add_action('admin_enqueue_scripts', $plugin_admin, 'enqueue_scripts');
         
-        // Añadir menú de administración
-        $this->loader->add_action('admin_menu', $plugin_admin, 'add_plugin_admin_menu');
-
         // Guardar/Actualizar opciones del plugin
         $this->loader->add_action('admin_init', $plugin_admin, 'options_update');
+        
+        // Crear instancia única del reprocessor
+        $this->reprocessor = new Niche_Creator_Plus_Reprocessor($this->get_plugin_name(), $this->get_version());
+        
+        // Crear instancia única del menú de administración
+        $this->admin_menu = new Niche_Creator_Plus_Admin_Menu($this->get_plugin_name(), $this->get_version());
+        
+        // Inyectar el reprocessor en el menú para evitar duplicaciones
+        $this->admin_menu->set_reprocessor($this->reprocessor);
+        
+        // Registrar el menú de administración
+        $this->loader->add_action('admin_menu', $this->admin_menu, 'register_admin_menu', 99);
         
         // Inicializar el sistema de actualizaciones desde GitHub
         // No necesitamos registrar hooks adicionales ya que el updater
