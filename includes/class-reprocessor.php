@@ -98,23 +98,25 @@ class Niche_Creator_Plus_Reprocessor {
 
             echo '<div class="notice notice-success"><p>';
             echo '<strong>Reprogramación completada para:</strong> ' . esc_html( $hook ) . ' (Grupo: ' . ($group === null ? '<em>Sin grupo</em>' : esc_html( $group )) . ')<br>';
-            echo 'Total reprogramadas: ' . count( $reprogramadas );
+            
+            $metadata = $reprogramadas['_metadata'] ?? [];
+            $total_reprogramadas = $metadata['total_reprogramadas'] ?? 0;
+            $total_encontradas = $metadata['total_encontradas'] ?? 0;
+            $debug_info = $metadata['debug_info'] ?? '';
+            
+            echo 'Total reprogramadas: <strong>' . intval($total_reprogramadas) . '</strong> de ' . intval($total_encontradas) . ' encontradas<br>';
 
             // Mostrar información de depuración si está disponible
-            if (isset($reprogramadas['debug_info'])) {
-                echo '<br><strong>Información de depuración:</strong> ' . esc_html($reprogramadas['debug_info']);
-            }
-
-            // Mostrar total de acciones encontradas
-            if (isset($reprogramadas['total_acciones'])) {
-                echo '<br><strong>Total de acciones encontradas:</strong> ' . intval($reprogramadas['total_acciones']);
+            if (!empty($debug_info)) {
+                echo '<small>Depuración: ' . esc_html($debug_info) . '</small>';
             }
 
             echo '</p></div>';
 
-            if ( count( $reprogramadas ) > 0 ) {
-                echo '<div class="card"><h3>Detalles de acciones reprogramadas</h3>';
-                echo '<pre>' . esc_html( var_export( $reprogramadas, true ) ) . '</pre></div>';
+            // Mostrar detalles solo si hay acciones reprogramadas
+            if ($total_reprogramadas > 0 && isset($reprogramadas['acciones']) && count($reprogramadas['acciones']) > 0) {
+                echo '<div class="card"><h3>Detalles de acciones reprogramadas (' . intval($total_reprogramadas) . ')</h3>';
+                echo '<pre>' . esc_html( var_export( $reprogramadas['acciones'], true ) ) . '</pre></div>';
             }
         }
 
@@ -190,11 +192,11 @@ class Niche_Creator_Plus_Reprocessor {
 
         $inicio = $ultimo ? strtotime( $ultimo ) : time();
         $intervalo = 120; // segundos
-        $resultado = [];
+        $debug_info = '';
 
         if ($group) {
             // Si se especifica un grupo, filtrar por hook y grupo
-            $resultado['debug_info'] = 'Ejecutando búsqueda con grupo específico: ' . $group;
+            $debug_info = 'Ejecutando búsqueda con grupo específico: ' . $group;
             
             $acciones = $wpdb->get_results( $wpdb->prepare(
                 "SELECT a.action_id, a.args
@@ -207,7 +209,7 @@ class Niche_Creator_Plus_Reprocessor {
             $total_acciones = count($acciones);
         } else {
             // Si no se especifica grupo (grupo es NULL), filtrar por hook y grupo NULL
-            $resultado['debug_info'] = 'Ejecutando búsqueda sin grupo específico (grupo NULL)'; 
+            $debug_info = 'Ejecutando búsqueda sin grupo específico (grupo NULL)'; 
             
             $acciones = $wpdb->get_results( $wpdb->prepare(
                 "SELECT a.action_id, a.args
@@ -219,9 +221,16 @@ class Niche_Creator_Plus_Reprocessor {
             ) );
             $total_acciones = count($acciones);
         }
-        echo 'Total acciones seleccionadas: ' . esc_html($total_acciones);
-        // Mostrar cantidad de acciones seleccionadas
-        $resultado['total_acciones'] = $total_acciones;
+        
+        // Inicializar estructura de resultado con metadata
+        $resultado = [
+            '_metadata' => [
+                'debug_info' => $debug_info,
+                'total_encontradas' => $total_acciones,
+                'total_reprogramadas' => 0
+            ],
+            'acciones' => []
+        ];
 
         foreach ( $acciones as $i => $accion ) {
             $args = maybe_unserialize( $accion->args );
@@ -236,7 +245,8 @@ class Niche_Creator_Plus_Reprocessor {
                 );
 
                 if ( $nuevo_id ) {
-                    $resultado[] = $args;
+                    $resultado['acciones'][] = $args;
+                    $resultado['_metadata']['total_reprogramadas']++;
 
                     // Cancelar acción original
                     $wpdb->update(
