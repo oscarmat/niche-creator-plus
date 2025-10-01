@@ -96,13 +96,17 @@ class Niche_Creator_Plus_Reprocessor {
             // Reprocesar acciones con el hook y grupo específicos
             $reprogramadas = $this->reprocesar_acciones_fallidas_por_hook_y_grupo( $hook, $group );
 
-            echo '<div class="notice notice-success"><p>';
-            echo '<strong>Reprogramación completada para:</strong> ' . esc_html( $hook ) . ' (Grupo: ' . ($group === null ? '<em>Sin grupo</em>' : esc_html( $group )) . ')<br>';
-            
             $metadata = $reprogramadas['_metadata'] ?? [];
             $total_reprogramadas = $metadata['total_reprogramadas'] ?? 0;
             $total_encontradas = $metadata['total_encontradas'] ?? 0;
             $debug_info = $metadata['debug_info'] ?? '';
+            $errores = $metadata['errores'] ?? [];
+            
+            // Determinar tipo de notificación según el resultado
+            $notice_class = $total_reprogramadas > 0 ? 'notice-success' : 'notice-warning';
+            
+            echo '<div class="notice ' . $notice_class . '"><p>';
+            echo '<strong>Reprogramación completada para:</strong> ' . esc_html( $hook ) . ' (Grupo: ' . ($group === null ? '<em>Sin grupo</em>' : esc_html( $group )) . ')<br>';
             
             echo 'Total reprogramadas: <strong>' . intval($total_reprogramadas) . '</strong> de ' . intval($total_encontradas) . ' encontradas<br>';
 
@@ -117,6 +121,23 @@ class Niche_Creator_Plus_Reprocessor {
             if ($total_reprogramadas > 0 && isset($reprogramadas['acciones']) && count($reprogramadas['acciones']) > 0) {
                 echo '<div class="card"><h3>Detalles de acciones reprogramadas (' . intval($total_reprogramadas) . ')</h3>';
                 echo '<pre>' . esc_html( var_export( $reprogramadas['acciones'], true ) ) . '</pre></div>';
+            }
+            
+            // Mostrar errores si existen
+            if (!empty($errores)) {
+                echo '<div class="notice notice-error"><p>';
+                echo '<strong>⚠️ Se encontraron ' . count($errores) . ' errores al reprogramar:</strong></p>';
+                echo '<ul style="margin-left: 20px;">';
+                foreach ($errores as $error) {
+                    echo '<li>';
+                    echo 'Acción #' . intval($error['action_id']) . ': ' . esc_html($error['motivo']);
+                    echo '</li>';
+                }
+                echo '</ul>';
+                echo '<details><summary>Ver detalles técnicos</summary>';
+                echo '<pre style="background: #f5f5f5; padding: 10px; overflow: auto;">' . esc_html( var_export( $errores, true ) ) . '</pre>';
+                echo '</details>';
+                echo '</div>';
             }
         }
 
@@ -232,6 +253,8 @@ class Niche_Creator_Plus_Reprocessor {
             'acciones' => []
         ];
 
+        $errores = [];
+        
         foreach ( $acciones as $i => $accion ) {
             $args = maybe_unserialize( $accion->args );
             if ( is_array( $args ) ) {
@@ -268,8 +291,28 @@ class Niche_Creator_Plus_Reprocessor {
                         ],
                         [ '%d', '%s', '%s', '%s' ]
                     );
+                } else {
+                    // Registrar error si no se pudo reprogramar
+                    $errores[] = [
+                        'action_id' => $accion->action_id,
+                        'motivo' => 'as_schedule_single_action devolvió false/0',
+                        'args' => $args,
+                        'timestamp' => $timestamp
+                    ];
+                    error_log("Niche Creator Plus: Error al reprogramar acción {$accion->action_id} para hook {$hook}");
                 }
+            } else {
+                $errores[] = [
+                    'action_id' => $accion->action_id,
+                    'motivo' => 'Args no es un array después de unserialize',
+                    'args_raw' => $accion->args
+                ];
             }
+        }
+        
+        // Agregar errores a la metadata si existen
+        if (!empty($errores)) {
+            $resultado['_metadata']['errores'] = $errores;
         }
 
         return $resultado;
