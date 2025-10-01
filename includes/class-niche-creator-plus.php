@@ -213,13 +213,16 @@ class Niche_Creator_Plus {
      */
     public function run() {
         // Inicializar el sistema de actualizaciones desde GitHub
-        new Niche_Creator_Plus_Updater(
+        $updater = new Niche_Creator_Plus_Updater(
             $this->plugin_name,
             $this->version,
             NICHE_CREATOR_PLUS_FILE,
             'oscarmat',
             'niche-creator-plus'
         );
+        
+        // Registrar los hooks del updater
+        $updater->init();
         
         $this->loader->run();
     }

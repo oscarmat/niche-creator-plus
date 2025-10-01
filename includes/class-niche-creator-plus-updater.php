@@ -94,6 +94,16 @@ class Niche_Creator_Plus_Updater {
         $this->github_username = $github_username;
         $this->github_repo = $github_repo;
 
+        // NO registrar hooks en el constructor
+        // Los hooks deben registrarse explícitamente llamando a init()
+    }
+
+    /**
+     * Registra los hooks necesarios para el sistema de actualización.
+     *
+     * @since    1.0.13
+     */
+    public function init() {
         // Añadir filtros para el proceso de actualización
         add_filter('pre_set_site_transient_update_plugins', array($this, 'check_update'));
         add_filter('plugins_api', array($this, 'plugin_info'), 10, 3);
