@@ -256,7 +256,17 @@ class Niche_Creator_Plus_Reprocessor {
         $errores = [];
         
         foreach ( $acciones as $i => $accion ) {
+            // Intentar deserializar primero (formato PHP serializado)
             $args = maybe_unserialize( $accion->args );
+            
+            // Si no es un array, intentar decodificar como JSON
+            if ( ! is_array( $args ) ) {
+                $json_decoded = json_decode( $accion->args, true );
+                if ( json_last_error() === JSON_ERROR_NONE && is_array( $json_decoded ) ) {
+                    $args = $json_decoded;
+                }
+            }
+            
             if ( is_array( $args ) ) {
                 $timestamp = $inicio + ( $i * $intervalo );
 
@@ -302,10 +312,20 @@ class Niche_Creator_Plus_Reprocessor {
                     error_log("Niche Creator Plus: Error al reprogramar acción {$accion->action_id} para hook {$hook}");
                 }
             } else {
+                // Determinar el motivo específico del error
+                $motivo = 'Args no es un array';
+                if ( is_string( $accion->args ) ) {
+                    $json_error = json_last_error();
+                    if ( $json_error !== JSON_ERROR_NONE ) {
+                        $motivo = 'Formato inválido (no es PHP serializado ni JSON válido)';
+                    }
+                }
+                
                 $errores[] = [
                     'action_id' => $accion->action_id,
-                    'motivo' => 'Args no es un array después de unserialize',
-                    'args_raw' => $accion->args
+                    'motivo' => $motivo,
+                    'args_raw' => $accion->args,
+                    'tipo_recibido' => gettype($args)
                 ];
             }
         }
