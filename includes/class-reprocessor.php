@@ -41,6 +41,15 @@ class Niche_Creator_Plus_Reprocessor {
     private $version;
 
     /**
+     * Hooks cuyas acciones llevan el escrapeo en los args: hook => posición del argumento.
+     *
+     * @since    1.0.18
+     * @access   private
+     * @var      array
+     */
+    private $hooks_con_escrapeo = [ 'cargar_categorias' => 3 ];
+
+    /**
      * Inicializa la clase y establece sus propiedades.
      *
      * @since    1.0.0
@@ -125,6 +134,11 @@ class Niche_Creator_Plus_Reprocessor {
             
             echo 'Total reprogramadas: <strong>' . intval($total_reprogramadas) . '</strong> de ' . intval($total_encontradas) . ' encontradas<br>';
 
+            $total_omitidas = $metadata['total_omitidas'] ?? 0;
+            if ( $total_omitidas > 0 ) {
+                echo 'Omitidas (escrapeo sin filas en la tabla, siguen como fallidas): <strong>' . intval( $total_omitidas ) . '</strong><br>';
+            }
+
             // Mostrar información de depuración si está disponible
             if (!empty($debug_info)) {
                 echo '<small>Depuración: ' . esc_html($debug_info) . '</small>';
@@ -168,12 +182,19 @@ class Niche_Creator_Plus_Reprocessor {
                 echo '<tr>';
                 echo '<td>' . esc_html( $fila['hook'] ) . '</td>';
                 echo '<td>' . (empty($fila['group']) ? '<em>Sin grupo</em>' : esc_html( $fila['group'] )) . '</td>';
-                echo '<td>' . intval( $fila['count'] ) . '</td>';
+                $por_escrapeo = $this->contar_fallidas_por_escrapeo( $fila['hook'], empty( $fila['group'] ) ? null : $fila['group'] );
+                echo '<td>' . intval( $fila['count'] );
+                if ( $por_escrapeo && $por_escrapeo['inactivas'] > 0 ) {
+                    echo ' <small>(' . intval( $por_escrapeo['activas'] ) . ' reprogramables; '
+                        . intval( $por_escrapeo['inactivas'] ) . ' de un escrapeo sin filas)</small>';
+                }
+                echo '</td>';
                 echo '<td>';
                 // Un formulario por fila: así el grupo enviado es siempre el de la fila pulsada
                 echo '<form method="post">';
                 echo '<input type="hidden" name="nichecreator_plus_nonce" value="' . esc_attr( wp_create_nonce( 'nichecreator_plus_accion' ) ) . '">';
-                echo '<button type="submit" name="nichecreator_plus_hook" value="' . esc_attr( $fila['hook'] ) . '" class="button button-primary">';
+                $deshabilitar = ( $por_escrapeo && $por_escrapeo['activas'] === 0 ) ? ' disabled' : '';
+                echo '<button type="submit" name="nichecreator_plus_hook" value="' . esc_attr( $fila['hook'] ) . '" class="button button-primary"' . $deshabilitar . '>';
                 echo 'Reprocesar';
                 echo '</button>';
                 // Usamos un valor especial para indicar NULL cuando el grupo está vacío
@@ -231,34 +252,12 @@ class Niche_Creator_Plus_Reprocessor {
         $intervalo = $this->get_intervalo( $hook );
         $debug_info = '';
 
-        if ($group) {
-            // Si se especifica un grupo, filtrar por hook y grupo
-            $debug_info = 'Ejecutando búsqueda con grupo específico: ' . $group;
-            
-            $acciones = $wpdb->get_results( $wpdb->prepare(
-                "SELECT a.action_id, a.args
-                 FROM {$wpdb->prefix}actionscheduler_actions a
-                 INNER JOIN {$wpdb->prefix}actionscheduler_groups g ON a.group_id = g.group_id
-                 WHERE a.hook = %s AND a.status = 'failed' AND g.slug = %s
-                 ORDER BY a.action_id ASC",
-                $hook, $group
-            ) );
-            $total_acciones = count($acciones);
-        } else {
-            // Si no se especifica grupo (grupo es NULL), filtrar por hook y grupo NULL
-            $debug_info = 'Ejecutando búsqueda sin grupo específico (grupo NULL)'; 
-            
-            $acciones = $wpdb->get_results( $wpdb->prepare(
-                "SELECT a.action_id, a.args
-                 FROM {$wpdb->prefix}actionscheduler_actions a
-                 LEFT JOIN {$wpdb->prefix}actionscheduler_groups g ON a.group_id = g.group_id
-                 WHERE a.hook = %s AND a.status = 'failed' AND (g.slug IS NULL OR g.slug = '')
-                 ORDER BY a.action_id ASC",
-                $hook
-            ) );
-            $total_acciones = count($acciones);
-        }
-        
+        $debug_info = $group
+            ? 'Ejecutando búsqueda con grupo específico: ' . $group
+            : 'Ejecutando búsqueda sin grupo específico (grupo NULL)';
+        $acciones = $this->get_acciones_fallidas( $hook, $group );
+        $total_acciones = count($acciones);
+
         // Inicializar estructura de resultado con metadata
         $resultado = [
             '_metadata' => [
@@ -270,21 +269,22 @@ class Niche_Creator_Plus_Reprocessor {
         ];
 
         $errores = [];
+        $omitidas = [];
+        $activos = $this->get_escrapeos_activos();
+        $n = 0; // posición entre las realmente reprogramadas (para espaciarlas)
         
-        foreach ( $acciones as $i => $accion ) {
-            // Intentar deserializar primero (formato PHP serializado)
-            $args = maybe_unserialize( $accion->args );
-            
-            // Si no es un array, intentar decodificar como JSON
-            if ( ! is_array( $args ) ) {
-                $json_decoded = json_decode( $accion->args, true );
-                if ( json_last_error() === JSON_ERROR_NONE && is_array( $json_decoded ) ) {
-                    $args = $json_decoded;
-                }
+        foreach ( $acciones as $accion ) {
+            $args = $this->decodificar_args( $accion->args );
+
+            if ( is_array( $args ) && ! $this->esta_activa( $hook, $args, $activos ) ) {
+                // Escrapeo sin filas en niche_tabla: no generaría nada; se deja como fallida
+                $omitidas[] = [ 'action_id' => $accion->action_id, 'args' => $args ];
+                continue;
             }
-            
+
             if ( is_array( $args ) ) {
-                $timestamp = $inicio + ( $i * $intervalo );
+                $timestamp = $inicio + ( $n * $intervalo );
+                $n++;
 
                 $nuevo_id = as_schedule_single_action(
                     $timestamp,
@@ -357,12 +357,129 @@ class Niche_Creator_Plus_Reprocessor {
             }
         }
         
+        $resultado['_metadata']['total_omitidas'] = count( $omitidas );
+        if ( ! empty( $omitidas ) ) {
+            $resultado['_metadata']['omitidas'] = $omitidas;
+        }
+
         // Agregar errores a la metadata si existen
         if (!empty($errores)) {
             $resultado['_metadata']['errores'] = $errores;
         }
 
         return $resultado;
+    }
+
+    /**
+     * Acciones fallidas de un hook y grupo (grupo null = sin grupo).
+     *
+     * @since    1.0.18
+     * @param    string         $hook     Hook
+     * @param    string|null    $group    Slug del grupo o null
+     * @return   array          Filas con action_id y args
+     */
+    private function get_acciones_fallidas( $hook, $group = null ) {
+        global $wpdb;
+
+        if ( $group ) {
+            return $wpdb->get_results( $wpdb->prepare(
+                "SELECT a.action_id, a.args
+                 FROM {$wpdb->prefix}actionscheduler_actions a
+                 INNER JOIN {$wpdb->prefix}actionscheduler_groups g ON a.group_id = g.group_id
+                 WHERE a.hook = %s AND a.status = 'failed' AND g.slug = %s
+                 ORDER BY a.action_id ASC",
+                $hook, $group
+            ) );
+        }
+        return $wpdb->get_results( $wpdb->prepare(
+            "SELECT a.action_id, a.args
+             FROM {$wpdb->prefix}actionscheduler_actions a
+             LEFT JOIN {$wpdb->prefix}actionscheduler_groups g ON a.group_id = g.group_id
+             WHERE a.hook = %s AND a.status = 'failed' AND (g.slug IS NULL OR g.slug = '')
+             ORDER BY a.action_id ASC",
+            $hook
+        ) );
+    }
+
+    /**
+     * Args de una acción de Action Scheduler (PHP serializado o JSON) o null si no son un array.
+     *
+     * @since    1.0.18
+     * @param    string    $raw    Columna args
+     * @return   array|null
+     */
+    private function decodificar_args( $raw ) {
+        $args = maybe_unserialize( $raw );
+        if ( is_array( $args ) ) {
+            return $args;
+        }
+        $json = json_decode( $raw, true );
+        return ( json_last_error() === JSON_ERROR_NONE && is_array( $json ) ) ? $json : null;
+    }
+
+    /**
+     * Escrapeos con filas en niche_tabla (los que pueden generar algo ahora), o null si no se puede saber
+     * (sin tabla de Niche Creator o error de consulta): entonces no se filtra.
+     *
+     * @since    1.0.18
+     * @return   array|null
+     */
+    public function get_escrapeos_activos() {
+        global $wpdb;
+
+        $tabla = $wpdb->prefix . 'niche_tabla';
+        if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $tabla ) ) ) !== $tabla ) {
+            return null;
+        }
+        $wpdb->last_error = '';
+        $escrapeos = $wpdb->get_col( "SELECT DISTINCT escrapeo FROM `{$tabla}`" );
+        if ( $wpdb->last_error !== '' || ! is_array( $escrapeos ) ) {
+            return null;
+        }
+        return array_map( 'strval', $escrapeos );
+    }
+
+    /**
+     * Indica si una acción fallida debe reprogramarse: solo las de hooks con escrapeo en los args
+     * (hoy cargar_categorias, 4.º arg) se limitan a escrapeos con filas; el resto siempre.
+     *
+     * @since    1.0.18
+     * @param    string        $hook      Hook
+     * @param    array         $args      Args de la acción
+     * @param    array|null    $activos   Resultado de get_escrapeos_activos()
+     * @return   bool
+     */
+    private function esta_activa( $hook, $args, $activos ) {
+        if ( $activos === null || ! isset( $this->hooks_con_escrapeo[ $hook ] ) ) {
+            return true;
+        }
+        $indice = $this->hooks_con_escrapeo[ $hook ];
+        if ( ! isset( $args[ $indice ] ) ) {
+            return true;
+        }
+        return in_array( (string) $args[ $indice ], $activos, true );
+    }
+
+    /**
+     * Cuántas fallidas de un hook y grupo son reprogramables ahora y cuántas son de escrapeos sin filas.
+     *
+     * @since    1.0.18
+     * @param    string         $hook    Hook
+     * @param    string|null    $group   Slug del grupo o null
+     * @return   array|null     [ 'activas' => n, 'inactivas' => n ], o null si el hook no se filtra
+     */
+    private function contar_fallidas_por_escrapeo( $hook, $group ) {
+        $activos = $this->get_escrapeos_activos();
+        if ( $activos === null || ! isset( $this->hooks_con_escrapeo[ $hook ] ) ) {
+            return null;
+        }
+        $cuenta = [ 'activas' => 0, 'inactivas' => 0 ];
+        foreach ( $this->get_acciones_fallidas( $hook, $group ) as $accion ) {
+            $args = $this->decodificar_args( $accion->args );
+            $activa = ! is_array( $args ) || $this->esta_activa( $hook, $args, $activos );
+            $cuenta[ $activa ? 'activas' : 'inactivas' ]++;
+        }
+        return $cuenta;
     }
 
     /**
