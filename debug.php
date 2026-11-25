@@ -6,11 +6,6 @@
  * no puede activarse. Colócalo en la raíz de WordPress y accede a él directamente.
  */
 
-// Habilitar la visualización de errores
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
 // Definir la ruta al plugin
 $plugin_path = __DIR__;
 
@@ -43,6 +38,17 @@ if (!defined('ABSPATH')) {
         require_once $wp_load_path;
     }
 }
+
+// Solo administradores: sin WordPress cargado o sin permisos no se muestra nada
+if (!function_exists('current_user_can') || !current_user_can('manage_options')) {
+    http_response_code(403);
+    exit('Acceso denegado.');
+}
+
+// Habilitar la visualización de errores (ya autenticado)
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 
 echo "<h1>Diagnóstico de Niche Creator Plus</h1>";
 

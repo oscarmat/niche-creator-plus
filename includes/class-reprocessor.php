@@ -66,7 +66,22 @@ class Niche_Creator_Plus_Reprocessor {
             'cargar_geograficos',
             'cargar_scrape',
             'cargar_ia',
+            'cargar_categorias',
         ];
+    }
+
+    /**
+     * Segundos entre acciones reprogramadas de un hook. Las tareas ligeras (categorías) van más juntas.
+     * Filtrable con `niche_creator_plus_intervalo`.
+     *
+     * @since    1.0.17
+     * @param    string    $hook    Hook a reprogramar
+     * @return   int
+     */
+    public function get_intervalo( $hook ) {
+        $intervalos = [ 'cargar_categorias' => 10 ];
+        $intervalo = isset( $intervalos[ $hook ] ) ? $intervalos[ $hook ] : 120;
+        return max( 1, (int) apply_filters( 'niche_creator_plus_intervalo', $intervalo, $hook ) );
     }
 
     /**
@@ -143,8 +158,6 @@ class Niche_Creator_Plus_Reprocessor {
 
         // Resumen de errores por hook
         echo '<h2>Resumen de eventos fallidos</h2>';
-        echo '<form method="post">';
-        wp_nonce_field( 'nichecreator_plus_accion', 'nichecreator_plus_nonce' );
         echo '<table class="widefat"><thead><tr><th>Hook</th><th>Grupo</th><th>Acciones fallidas</th><th>Acción</th></tr></thead><tbody>';
         
         $resumen = $this->get_resumen_fallidas();
@@ -157,18 +170,21 @@ class Niche_Creator_Plus_Reprocessor {
                 echo '<td>' . (empty($fila['group']) ? '<em>Sin grupo</em>' : esc_html( $fila['group'] )) . '</td>';
                 echo '<td>' . intval( $fila['count'] ) . '</td>';
                 echo '<td>';
+                // Un formulario por fila: así el grupo enviado es siempre el de la fila pulsada
+                echo '<form method="post">';
+                echo '<input type="hidden" name="nichecreator_plus_nonce" value="' . esc_attr( wp_create_nonce( 'nichecreator_plus_accion' ) ) . '">';
                 echo '<button type="submit" name="nichecreator_plus_hook" value="' . esc_attr( $fila['hook'] ) . '" class="button button-primary">';
                 echo 'Reprocesar';
                 echo '</button>';
                 // Usamos un valor especial para indicar NULL cuando el grupo está vacío
                 $group_value = empty($fila['group']) ? '__NULL__' : $fila['group'];
                 echo '<input type="hidden" name="nichecreator_plus_group" value="' . esc_attr( $group_value ) . '">';
+                echo '</form>';
                 echo '</td>';
                 echo '</tr>';
             }
         }
         echo '</tbody></table>';
-        echo '</form>';
         
         // Ya no necesitamos los botones individuales por hook, ya que ahora tenemos botones en cada fila
         // Los eliminamos para evitar duplicidad de funcionalidad
@@ -212,7 +228,7 @@ class Niche_Creator_Plus_Reprocessor {
         );
 
         $inicio = $ultimo ? strtotime( $ultimo ) : time();
-        $intervalo = 120; // segundos
+        $intervalo = $this->get_intervalo( $hook );
         $debug_info = '';
 
         if ($group) {
@@ -281,14 +297,25 @@ class Niche_Creator_Plus_Reprocessor {
                     $resultado['acciones'][] = $args;
                     $resultado['_metadata']['total_reprogramadas']++;
 
-                    // Cancelar acción original
-                    $wpdb->update(
-                        "{$wpdb->prefix}actionscheduler_actions",
-                        [ 'status' => 'canceled' ],
-                        [ 'action_id' => $accion->action_id ],
-                        [ '%s' ],
-                        [ '%d' ]
-                    );
+                    // Cancelar acción original (API de Action Scheduler; UPDATE directo solo como último recurso)
+                    $cancelada = false;
+                    if ( class_exists( 'ActionScheduler' ) && ActionScheduler::is_initialized() ) {
+                        try {
+                            ActionScheduler::store()->cancel_action( $accion->action_id );
+                            $cancelada = true;
+                        } catch ( Exception $e ) {
+                            error_log( "Niche Creator Plus: no se pudo cancelar {$accion->action_id} con la API: " . $e->getMessage() );
+                        }
+                    }
+                    if ( ! $cancelada ) {
+                        $wpdb->update(
+                            "{$wpdb->prefix}actionscheduler_actions",
+                            [ 'status' => 'canceled' ],
+                            [ 'action_id' => $accion->action_id ],
+                            [ '%s' ],
+                            [ '%d' ]
+                        );
+                    }
 
                     // Añadir log
                     $wpdb->insert(

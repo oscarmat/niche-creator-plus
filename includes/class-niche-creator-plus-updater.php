@@ -59,6 +59,15 @@ class Niche_Creator_Plus_Updater {
     private $plugin_slug;
 
     /**
+     * Ruta del plugin relativa a wp-content/plugins (clave que usa WordPress).
+     *
+     * @since    1.0.17
+     * @access   private
+     * @var      string    $plugin_basename
+     */
+    private $plugin_basename;
+
+    /**
      * El usuario de GitHub.
      *
      * @since    1.0.0
@@ -91,6 +100,7 @@ class Niche_Creator_Plus_Updater {
         $this->version = $version;
         $this->plugin_file = $plugin_file;
         $this->plugin_slug = basename(dirname($plugin_file));
+        $this->plugin_basename = plugin_basename($plugin_file);
         $this->github_username = $github_username;
         $this->github_repo = $github_repo;
 
@@ -107,7 +117,8 @@ class Niche_Creator_Plus_Updater {
         // Añadir filtros para el proceso de actualización
         add_filter('pre_set_site_transient_update_plugins', array($this, 'check_update'));
         add_filter('plugins_api', array($this, 'plugin_info'), 10, 3);
-        add_filter('upgrader_post_install', array($this, 'post_install'), 10, 3);
+        add_filter('upgrader_pre_download', array($this, 'pre_download'), 10, 3);
+        add_filter('upgrader_source_selection', array($this, 'source_selection'), 10, 4);
     }
 
     /**
@@ -134,12 +145,12 @@ class Niche_Creator_Plus_Updater {
             $plugin_data = get_plugin_data($this->plugin_file);
             $plugin_slug = basename($this->plugin_file, '.php');
 
-            $transient->response[$this->plugin_file] = (object) array(
+            $transient->response[$this->plugin_basename] = (object) array(
                 'slug' => $plugin_slug,
-                'plugin' => $this->plugin_file,
+                'plugin' => $this->plugin_basename,
                 'new_version' => $github_version,
                 'url' => $plugin_data['PluginURI'],
-                'package' => $response->zipball_url,
+                'package' => $this->get_package_url($response),
             );
         }
 
@@ -183,65 +194,120 @@ class Niche_Creator_Plus_Updater {
                 'description' => $plugin_data['Description'],
                 'changelog' => $response->body,
             ),
-            'download_link' => $response->zipball_url,
+            'download_link' => $this->get_package_url($response),
         );
 
         return $result;
     }
 
     /**
-     * Acciones después de la instalación.
+     * Token de GitHub (constante GITHUB_ACCESS_TOKEN en wp-config.php), necesario con repos privados.
      *
-     * @since    1.0.0
-     * @param    bool      $response    Resultado de la instalación.
-     * @param    array     $hook_extra  Información adicional.
-     * @param    array     $result      Información de la instalación.
-     * @return   array     Información de la instalación modificada.
+     * @since    1.0.17
+     * @return   string
      */
-    public function post_install($response, $hook_extra, $result) {
+    private function get_token() {
+        return defined('GITHUB_ACCESS_TOKEN') ? (string) GITHUB_ACCESS_TOKEN : '';
+    }
+
+    /**
+     * URL del paquete a instalar: el ZIP adjunto a la release (carpeta raíz correcta) o, si no hay, el zipball.
+     * Con token se usa la URL de la API del asset, que es la única que sirve en repos privados.
+     *
+     * @since    1.0.17
+     * @param    object    $release    Release de la API de GitHub.
+     * @return   string
+     */
+    private function get_package_url($release) {
+        if (!empty($release->assets) && is_array($release->assets)) {
+            foreach ($release->assets as $asset) {
+                if (isset($asset->name) && preg_match('/^niche-creator-plus.*\.zip$/', $asset->name)) {
+                    return $this->get_token() ? $asset->url : $asset->browser_download_url;
+                }
+            }
+        }
+        return $release->zipball_url;
+    }
+
+    /**
+     * Descarga autenticada del paquete cuando es de nuestro repo y hay token.
+     *
+     * GitHub responde con una redirección a una URL firmada que no admite la cabecera Authorization,
+     * así que se pide con redirection=0 y se sigue la redirección sin credenciales.
+     *
+     * @since    1.0.17
+     * @param    bool|string|WP_Error    $reply      Resultado previo (false = descargar WordPress).
+     * @param    string                  $package    URL del paquete.
+     * @return   bool|string|WP_Error
+     */
+    public function pre_download($reply, $package) {
+        $prefix = sprintf('https://api.github.com/repos/%s/%s/', $this->github_username, $this->github_repo);
+        $token = $this->get_token();
+        if (!$token || !is_string($package) || strpos($package, $prefix) !== 0) {
+            return $reply;
+        }
+
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+
+        $response = wp_remote_get($package, array(
+            'headers' => array(
+                'Accept' => 'application/octet-stream',
+                'Authorization' => 'token ' . $token,
+                'User-Agent' => 'WordPress/' . get_bloginfo('version') . '; ' . get_bloginfo('url'),
+            ),
+            'redirection' => 0,
+            'timeout' => 60,
+        ));
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $code = wp_remote_retrieve_response_code($response);
+        if (in_array($code, array(301, 302, 303, 307, 308), true)) {
+            $location = wp_remote_retrieve_header($response, 'location');
+            if (!is_string($location) || strpos($location, 'https://') !== 0) {
+                return new WP_Error('github_download_redirect', 'Redirección de descarga no válida.');
+            }
+            return download_url($location, 300);
+        }
+        if (200 === $code) {
+            $tmp = wp_tempnam($package);
+            if (!$tmp || false === file_put_contents($tmp, wp_remote_retrieve_body($response))) {
+                return new WP_Error('github_download_write', 'No se pudo guardar el paquete descargado.');
+            }
+            return $tmp;
+        }
+        return new WP_Error('github_download_error', sprintf('Error al descargar el paquete de GitHub. Código: %s', $code));
+    }
+
+    /**
+     * Garantiza que la carpeta extraída se llame como el plugin (un zipball trae owner-repo-sha).
+     *
+     * @since    1.0.17
+     * @param    string        $source           Carpeta extraída.
+     * @param    string        $remote_source    Carpeta temporal que la contiene.
+     * @param    WP_Upgrader   $upgrader         Instancia del actualizador.
+     * @param    array         $hook_extra       Datos de la actualización.
+     * @return   string|WP_Error
+     */
+    public function source_selection($source, $remote_source, $upgrader = null, $hook_extra = array()) {
         global $wp_filesystem;
 
-        // Comprobar si es nuestro plugin
-        if (!isset($hook_extra['plugin']) || $hook_extra['plugin'] !== $this->plugin_file) {
-            return $result;
+        if (empty($hook_extra['plugin']) || $hook_extra['plugin'] !== $this->plugin_basename) {
+            return $source;
         }
 
-        // Asegurarse de que el sistema de archivos de WordPress está inicializado
-        if (!$wp_filesystem) {
-            require_once ABSPATH . 'wp-admin/includes/file.php';
-            WP_Filesystem();
+        $deseada = trailingslashit($remote_source) . $this->plugin_slug . '/';
+        if (trailingslashit($source) === $deseada) {
+            return $source;
         }
-        
-        // Obtener el directorio base del plugin
-        $plugin_folder = WP_PLUGIN_DIR . '/' . dirname(plugin_basename($this->plugin_file));
-        $plugin_folder = trailingslashit($plugin_folder);
-        
-        // Buscar el directorio del plugin dentro del ZIP extraído
-        $source_path = $result['destination'];
-        $source_dirs = glob(trailingslashit($source_path) . '*', GLOB_ONLYDIR);
-        
-        if (count($source_dirs) === 1) {
-            // Si hay un solo directorio en la raíz, ese es probablemente el plugin
-            $source_path = trailingslashit($source_dirs[0]);
+        if (!$wp_filesystem->exists(trailingslashit($source) . basename($this->plugin_file))) {
+            return new WP_Error('ncp_paquete_invalido', 'El paquete no contiene ' . basename($this->plugin_file) . '.');
         }
-        
-        // Mover archivos a la ubicación correcta
-        if ($wp_filesystem->is_dir($source_path)) {
-            // Limpiar directorio de destino
-            $wp_filesystem->delete($plugin_folder, true);
-            
-            // Copiar archivos
-            copy_dir($source_path, $plugin_folder);
-            
-            // Limpiar directorio temporal
-            $wp_filesystem->delete($result['destination'], true);
-            
-            // Actualizar la ruta de destino
-            $result['destination'] = $plugin_folder;
-            $result['destination_name'] = dirname(plugin_basename($this->plugin_file));
+        if (!$wp_filesystem->move($source, $deseada, true)) {
+            return new WP_Error('ncp_renombrar', 'No se pudo renombrar la carpeta del plugin.');
         }
-
-        return $result;
+        return $deseada;
     }
 
     /**
